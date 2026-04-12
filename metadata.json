@@ -1,0 +1,5 @@
+{
+  "name": "MHT Translator",
+  "description": "Extracts and translates MHT files to English using multiple LLM providers (Google, Grok, Ollama).",
+  "requestFramePermissions": []
+}
