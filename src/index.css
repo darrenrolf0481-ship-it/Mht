@@ -1,1 +1,56 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Share+Tech+Mono&display=swap');
 @import "tailwindcss";
+
+@theme {
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-tech: "Share Tech Mono", monospace;
+  
+  --color-void: #050505;
+  --color-blood: #8b0000;
+  --color-neon-red: #ff3333;
+  --color-neon-amber: #ff9900;
+  --color-neon-green: #00ff66;
+}
+
+body {
+  background-color: #f9fafb;
+}
+
+body.dark {
+  background-color: var(--color-void);
+  color: #c8c8c8;
+}
+
+/* CRT Scanline Effect */
+.dark .crt::after {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+  z-index: 50;
+  background-size: 100% 4px;
+  pointer-events: none;
+  opacity: 0.15;
+}
+
+/* Custom Scrollbar for terminal vibe */
+.dark ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.dark ::-webkit-scrollbar-track {
+  background: #0a0a0a;
+  border-left: 1px solid #1a1a1a;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #331111;
+  border: 1px solid #ff3333;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #ff3333;
+}

@@ -62,9 +62,10 @@ export async function translateText(
   text: string,
   provider: ModelProvider,
   modelName: string,
-  apiKey?: string
+  apiKey?: string,
+  context?: string
 ): Promise<string> {
-  const systemPrompt = "You are a professional translator. Translate the following HTML or text into English. Preserve the HTML structure if it is HTML. Only return the translated content, no conversational filler.";
+  const systemPrompt = `You are a professional translator. Translate the following text into English. If the input is a JSON object (like Route A JSON format), PRESERVE the exact JSON structure, keys, arrays, and formatting, and ONLY translate the raw textual content found within. Do NOT translate system keys, UUIDs, code, or boolean values. Only return the translated content, no conversational filler.${context ? `\n\nAdditional context/instructions: ${context}` : ''}`;
 
   if (provider === "google") {
     const key = apiKey || import.meta.env.VITE_GEMINI_API_KEY || (import.meta as any).env?.GEMINI_API_KEY;

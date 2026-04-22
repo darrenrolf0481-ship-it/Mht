@@ -2,9 +2,20 @@ import JSZip from 'jszip';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 
-export type ExportFormat = 'html' | 'pdf' | 'docx' | 'json';
+export type ExportFormat = 'html' | 'pdf' | 'docx' | 'json' | 'gem_code';
 
-export async function exportFiles(files: {name: string, html: string, originalHtml?: string}[], format: ExportFormat): Promise<{blob: Blob, filename: string}> {
+export async function exportFiles(files: {name: string, html: string, originalHtml?: string, rawHtml?: string}[], format: ExportFormat): Promise<{blob: Blob, filename: string}> {
+  if (format === 'gem_code') {
+    // Generate an inner wrapping for Google Gem Knowledge base injection
+    let gemPayload = ``;
+    files.forEach((f, index) => {
+      gemPayload += `--- DOCUMENT ${index + 1}: ${f.name} ---\n\`\`\`json\n${f.originalHtml || f.html}\n\`\`\`\n\n`;
+    });
+    const blob = new Blob([gemPayload.trim()], { type: 'text/markdown' });
+    const filename = files.length === 1 ? `${files[0].name.replace(/\.[^/.]+$/, "")}_gem_inject.md` : 'gem_global_inject.md';
+    return { blob, filename };
+  }
+
   if (format === 'json') {
     const blob = new Blob([JSON.stringify(files, null, 2)], { type: 'application/json' });
     const filename = files.length === 1 ? `${files[0].name.replace(/\.[^/.]+$/, "")}_translated.json` : 'translated_files.json';
