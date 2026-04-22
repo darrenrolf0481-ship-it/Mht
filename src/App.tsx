@@ -25,6 +25,7 @@ export default function App() {
   const [globalError, setGlobalError] = useState<string>('');
   const [exportFormat, setExportFormat] = useState<ExportFormat>('html');
   const [uploadProgress, setUploadProgress] = useState({ isUploading: false, current: 0, total: 0 });
+  const [translationProgress, setTranslationProgress] = useState({ isActive: false, current: 0, total: 0 });
   const [mobileTab, setMobileTab] = useState<'list' | 'preview'>('list');
   const [isDarkMode, setIsDarkMode] = useState(true);
   
@@ -264,9 +265,15 @@ export default function App() {
     
     setIsProcessing(true);
     setGlobalError('');
+    setTranslationProgress({ isActive: true, current: 0, total: pendingFiles.length });
     
+    let completed = 0;
     for (const file of pendingFiles) {
-      if (!file.originalHtml) continue;
+      if (!file.originalHtml) {
+        completed++;
+        setTranslationProgress(prev => ({ ...prev, current: completed }));
+        continue;
+      }
       
       setFiles(prev => prev.map(f => f.id === file.id ? { ...f, status: 'processing', error: undefined } : f));
       
@@ -277,9 +284,12 @@ export default function App() {
       } catch (err: any) {
         setFiles(prev => prev.map(f => f.id === file.id ? { ...f, status: 'error', error: err.message || 'Translation failed' } : f));
       }
+      completed++;
+      setTranslationProgress(prev => ({ ...prev, current: completed }));
     }
     
     setIsProcessing(false);
+    setTranslationProgress({ isActive: false, current: 0, total: 0 });
   };
 
   const handleBulkTranslateSelected = async () => {
@@ -288,9 +298,15 @@ export default function App() {
 
     setIsProcessing(true);
     setGlobalError('');
+    setTranslationProgress({ isActive: true, current: 0, total: selectedFiles.length });
 
+    let completed = 0;
     for (const file of selectedFiles) {
-      if (!file.originalHtml) continue;
+      if (!file.originalHtml) {
+        completed++;
+        setTranslationProgress(prev => ({ ...prev, current: completed }));
+        continue;
+      }
 
       setFiles(prev => prev.map(f => f.id === file.id ? { ...f, status: 'processing', error: undefined, translatedHtml: '' } : f));
 
@@ -301,9 +317,12 @@ export default function App() {
       } catch (err: any) {
         setFiles(prev => prev.map(f => f.id === file.id ? { ...f, status: 'error', error: err.message || 'Translation failed' } : f));
       }
+      completed++;
+      setTranslationProgress(prev => ({ ...prev, current: completed }));
     }
 
     setIsProcessing(false);
+    setTranslationProgress({ isActive: false, current: 0, total: 0 });
     setCheckedFileIds(new Set()); // Clear selection after processing
   };
 
@@ -469,7 +488,7 @@ export default function App() {
   const doneCount = files.filter(f => f.status === 'done').length;
   const pendingCount = files.filter(f => f.status === 'pending' || f.status === 'error').length;
 
-  const MAX_PREVIEW_LENGTH = 50000;
+  const MAX_PREVIEW_LENGTH = 1500000;
 
   const renderPreview = (content: string, isEditable: boolean, onChange?: (val: string) => void, placeholder?: string, isProcessing?: boolean) => {
     if (isProcessing) {
@@ -785,6 +804,17 @@ export default function App() {
                   </div>
                   <div className={`w-full h-1.5 relative overflow-hidden ${isDarkMode ? "bg-[#050505] border border-blood/30" : "bg-blue-200 rounded-full"}`}>
                     <div className={`h-full transition-all duration-200 ${isDarkMode ? "bg-neon-red shadow-[0_0_8px_rgba(255,51,51,1)]" : "bg-blue-600 rounded-full"}`} style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}></div>
+                  </div>
+                </div>
+              )}
+              {translationProgress.isActive && (
+                <div className={`p-4 mb-2 flex flex-col gap-2 ${isDarkMode ? "bg-[#1a0505] rounded-none border border-blood text-neon-red font-tech uppercase shadow-[0_0_15px_rgba(255,51,51,0.15)]" : "bg-blue-50 rounded-lg border border-blue-100"}`}>
+                  <div className={`flex items-center justify-between text-sm ${isDarkMode ? "tracking-wider text-neon-red" : "text-blue-700 font-medium"}`}>
+                    <span className="flex items-center gap-2"><RefreshCw className={`w-4 h-4 animate-spin ${isDarkMode ? "drop-shadow-[0_0_5px_rgba(255,51,51,1)]" : ""}`} /> {isDarkMode ? "Processing Feeds..." : "Translating files..."}</span>
+                    <span className={`${isDarkMode ? "text-red-400" : ""}`}>{translationProgress.current} / {translationProgress.total}</span>
+                  </div>
+                  <div className={`w-full h-1.5 relative overflow-hidden ${isDarkMode ? "bg-[#050505] border border-blood/30" : "bg-blue-200 rounded-full"}`}>
+                    <div className={`h-full transition-all duration-200 ${isDarkMode ? "bg-neon-red shadow-[0_0_8px_rgba(255,51,51,1)]" : "bg-blue-600 rounded-full"}`} style={{ width: `${(translationProgress.current / translationProgress.total) * 100}%` }}></div>
                   </div>
                 </div>
               )}
