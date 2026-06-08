@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
 import JSZip from 'jszip';
 import { extractMHTBody, processSovereignPriority } from './lib/mhtParser';
-import { translateText, fetchOllamaModels, pullOllamaModel, ModelProvider, OllamaModel } from './lib/llm';
+import { translateText, fetchOllamaModels, pullOllamaModel, interactWithAI, ModelProvider, OllamaModel } from './lib/llm';
 import { exportFiles, ExportFormat } from './lib/exporter';
 import { Upload, Download, RefreshCw, Settings, FileText, Globe, CheckCircle2, AlertCircle, Clock, FileType, FilePlus, Tag, Trash2, Moon, Sun } from 'lucide-react';
 
@@ -27,6 +28,9 @@ export default function App() {
   const [uploadProgress, setUploadProgress] = useState({ isUploading: false, current: 0, total: 0 });
   const [translationProgress, setTranslationProgress] = useState({ isActive: false, current: 0, total: 0 });
   const [mobileTab, setMobileTab] = useState<'list' | 'preview'>('list');
+  const [aiQuery, setAiQuery] = useState('');
+  const [aiResult, setAiResult] = useState('');
+  const [isAiProcessing, setIsAiProcessing] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
   
   useEffect(() => {
@@ -38,8 +42,8 @@ export default function App() {
   }, [isDarkMode]);
 
   // Model settings
-  const [provider, setProvider] = useState<ModelProvider>('google');
-  const [modelName, setModelName] = useState<string>('gemini-3-flash-preview');
+  const [provider, setProvider] = useState<ModelProvider>('ollama');
+  const [modelName, setModelName] = useState<string>('');
   const [apiKey, setApiKey] = useState<string>('');
   const [globalContext, setGlobalContext] = useState<string>('');
   const [globalCustomTerms, setGlobalCustomTerms] = useState<string>('');
@@ -58,12 +62,10 @@ export default function App() {
     if (provider === 'ollama') {
       fetchOllamaModels().then(models => {
         setOllamaModels(models);
-        if (models.length > 0 && (!modelName || modelName.includes('gemini') || modelName.includes('grok'))) {
+        if (models.length > 0 && (!modelName || modelName.includes('grok'))) {
           setModelName(models[0].name);
         }
       });
-    } else if (provider === 'google') {
-      setModelName('gemini-3-flash-preview');
     } else if (provider === 'grok') {
       setModelName('grok-2-latest');
     }
@@ -98,6 +100,29 @@ export default function App() {
     }
   };
 
+  const handleAiInteraction = async () => {
+    if (!selectedFileId || !aiQuery.trim()) return;
+    const selectedFile = files.find(f => f.id === selectedFileId);
+    if (!selectedFile) return;
+
+    setIsAiProcessing(true);
+    setAiResult('');
+    try {
+      const result = await interactWithAI(
+        selectedFile.translatedHtml || selectedFile.originalHtml,
+        aiQuery,
+        provider,
+        modelName,
+        apiKey
+      );
+      setAiResult(result);
+    } catch (err: any) {
+      setAiResult(`Error: ${err.message}`);
+    } finally {
+      setIsAiProcessing(false);
+    }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || []) as File[];
     if (!selectedFiles.length) return;
@@ -116,7 +141,7 @@ export default function App() {
           const text = await file.text();
           const parsed = JSON.parse(text);
           // Auto-configure from JSON context override
-          if (parsed._meta === "Google Gem Config Override" || parsed.system_instructions !== undefined || parsed.global_context || parsed.ai_context) {
+          if (parsed._meta === "Ollama Config Override" || parsed.system_instructions !== undefined || parsed.global_context || parsed.ai_context) {
             const contextText = parsed.system_instructions || parsed.global_context || parsed.ai_context || '';
             if (contextText) setGlobalContext(contextText);
 
@@ -211,6 +236,20 @@ export default function App() {
         } catch (err: any) {
           setGlobalError(prev => prev ? `${prev} | Failed to read ZIP ${file.name}` : `Failed to read ZIP ${file.name}`);
         }
+      } else if (file.name.toLowerCase().endsWith('.pdf') || file.name.toLowerCase().endsWith('.docx')) {
+        currentProcessed++;
+        setUploadProgress(prev => ({ ...prev, current: currentProcessed }));
+        newFiles.push({
+          id: Math.random().toString(36).substring(7),
+          name: file.name,
+          rawHtml: '',
+          originalHtml: '',
+          translatedHtml: '',
+          status: 'error',
+          error: 'Complex file types (PDF/DOCX) must be converted via the CLI tool first. Run: npx tsx scripts/convert.ts <file>',
+          context: '',
+          customTerms: ''
+        });
       } else {
         currentProcessed++;
         setUploadProgress(prev => ({ ...prev, current: currentProcessed }));
@@ -218,7 +257,9 @@ export default function App() {
         
         try {
           const text = await file.text();
-          const body = extractMHTBody(text);
+          const body = file.name.toLowerCase().endsWith('.mht') || file.name.toLowerCase().endsWith('.mhtml') 
+            ? extractMHTBody(text) 
+            : text;
           const jsonOutput = processSovereignPriority(body, globalCustomTerms);
           newFiles.push({
             id: Math.random().toString(36).substring(7),
@@ -238,7 +279,7 @@ export default function App() {
             originalHtml: '',
             translatedHtml: '',
             status: 'error',
-            error: err.message || 'Failed to parse MHT',
+            error: err.message || 'Failed to process file',
             context: '',
             customTerms: ''
           });
@@ -588,7 +629,7 @@ export default function App() {
                   <li><strong>JSON Configurations:</strong> Drop a formatted `.json` file to instantly set up Global Context, Custom Terms, and Models without typing.</li>
                   <li><strong>Custom Terms:</strong> Commas block off specific root-level terms you want extracted globally or per-file (e.g. <i>"Project X, Target 4"</i>).</li>
                   <li><strong>Bulk Actions:</strong> Check the boxes next to files (or "Select All") to reveal Bulk Translate and Bulk Delete buttons.</li>
-                  <li><strong>Gem Code Export:</strong> Select "Gem Code (.md)" when exporting to get perfectly formatted block-data you can feed directly to Google Gems.</li>
+                  <li><strong>MD Code Export:</strong> Select "MD Code (.md)" when exporting to get perfectly formatted block-data you can feed directly to Ollamas.</li>
                   <li><strong>Sovereign System:</strong> This system inherently scans for priority telemetry, extracting biological metrics and identity nodes.</li>
                 </ul>
               </div>
@@ -602,7 +643,6 @@ export default function App() {
                   onChange={(e) => setProvider(e.target.value as ModelProvider)}
                   className={`w-full border p-2 text-sm outline-none ${isDarkMode ? "rounded-none border-blood/40 bg-[#0a0a0a] text-red-400 focus:ring-1 focus:ring-neon-red shadow-[0_0_10px_rgba(255,51,51,0.2)]" : "rounded-lg border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"}`}
                 >
-                  <option value="google">Google Gemini</option>
                   <option value="grok">xAI Grok</option>
                   <option value="ollama">Ollama (Local)</option>
                 </select>
@@ -627,15 +667,14 @@ export default function App() {
                     value={modelName} 
                     onChange={(e) => setModelName(e.target.value)}
                     className={`w-full border p-2 text-sm outline-none ${isDarkMode ? "rounded-none border-blood/40 bg-[#0a0a0a] text-neon-red focus:ring-1 focus:ring-neon-red shadow-[inset_0_0_5px_rgba(255,51,51,0.1)]" : "rounded-lg border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"}`}
-                    placeholder="e.g., gemini-3-flash-preview"
                   />
                 )}
               </div>
 
-              {(provider === 'grok' || provider === 'google') && (
+              {provider === 'grok' && (
                 <div>
                   <label className={`block text-sm mb-1 flex items-center justify-between ${isDarkMode ? "font-tech text-red-500 tracking-wide" : "font-medium text-gray-700"}`}>
-                    <span>API Key</span> {provider === 'google' && <span className={`text-xs font-normal ${isDarkMode ? "text-red-900/60" : "text-gray-400"}`}>(Optional if in env)</span>}
+                    API Key
                   </label>
                   <input 
                     type="password" 
@@ -717,7 +756,7 @@ export default function App() {
                </div>
                <div className={`text-xs flex items-start gap-2 p-3 ${isDarkMode ? "font-tech text-red-400 bg-[#1a0505] border border-blood/50 shadow-[inset_0_0_10px_rgba(255,51,51,0.05)]" : "text-gray-500 bg-blue-50/50 rounded border border-blue-100"}`}>
                  <FileText className="w-4 h-4 text-neon-red shrink-0" />
-                 <p className={`${isDarkMode ? "leading-relaxed" : ""}`}>Upload a JSON file containing <code className={`px-1 py-0.5 font-mono text-[10px] ${isDarkMode ? "bg-[#050505] border border-blood/30 text-neon-red" : "bg-white rounded text-blue-700"}`}>_meta: "Google Gem Config Override"</code>, <code className="bg-[#050505] border border-blood/30 px-1 py-0.5 text-neon-red font-mono text-[10px]">system_instructions</code>, or <code className="bg-[#050505] border border-blood/30 px-1 py-0.5 text-neon-red font-mono text-[10px]">custom_terms</code> to instantly overwrite these rules globally without manually typing.</p>
+                 <p className={`${isDarkMode ? "leading-relaxed" : ""}`}>Upload a JSON file containing <code className={`px-1 py-0.5 font-mono text-[10px] ${isDarkMode ? "bg-[#050505] border border-blood/30 text-neon-red" : "bg-white rounded text-blue-700"}`}>_meta: "Ollama Config Override"</code>, <code className="bg-[#050505] border border-blood/30 px-1 py-0.5 text-neon-red font-mono text-[10px]">system_instructions</code>, or <code className="bg-[#050505] border border-blood/30 px-1 py-0.5 text-neon-red font-mono text-[10px]">custom_terms</code> to instantly overwrite these rules globally without manually typing.</p>
                </div>
             </div>
           </div>
@@ -753,7 +792,7 @@ export default function App() {
                   type="file" 
                   ref={fileInputRef} 
                   onChange={handleFileUpload} 
-                  accept=".mht,.mhtml,.zip,.json" 
+                  accept=".mht,.mhtml,.zip,.json,.pdf,.docx" 
                   multiple
                   className="hidden" 
                 />
@@ -929,7 +968,7 @@ export default function App() {
                   <option value="pdf">{isDarkMode ? "PDF Block" : "PDF"}</option>
                   <option value="docx">{isDarkMode ? "Word Record" : "Word (DOC)"}</option>
                   <option value="json">{isDarkMode ? "JSON Raw" : "JSON"}</option>
-                  <option value="gem_code">Gem Code (.md)</option>
+                  <option value="md_code">MD Code (.md)</option>
                 </select>
                 
                 {exportFormat === 'json' ? (
@@ -981,6 +1020,41 @@ export default function App() {
           <div className={`w-full lg:w-2/3 flex-col h-full overflow-hidden ${mobileTab === 'preview' ? 'flex' : 'hidden lg:flex'} ${isDarkMode ? "gap-6 p-1" : "gap-4"}`}>
             {selectedFile ? (
               <>
+                {/* AI Interaction Console */}
+                <div className={`shrink-0 flex flex-col min-h-0 relative ${isDarkMode ? "bg-[#0a0a0a] rounded-none border border-blood/50" : "bg-white rounded-xl border border-gray-200 shadow-sm"}`}>
+                  <div className={`p-2 border-b flex items-center justify-between ${isDarkMode ? "border-blood bg-[#111]" : "border-gray-200 bg-gray-50"}`}>
+                    <div className="flex items-center gap-2">
+                      <RefreshCw className={`w-3 h-3 ${isAiProcessing ? 'animate-spin' : ''} text-neon-red`} />
+                      <span className={`text-[10px] ${isDarkMode ? "font-tech uppercase tracking-widest text-red-500" : "font-medium text-gray-700"}`}>AI Analysis Console</span>
+                    </div>
+                  </div>
+                  <div className="p-3 flex gap-2">
+                    <input 
+                      type="text"
+                      value={aiQuery}
+                      onChange={(e) => setAiQuery(e.target.value)}
+                      placeholder="Ask the AI about this file (e.g. 'Extract all names')"
+                      className={`flex-1 px-3 py-2 text-xs transition-all outline-none ${isDarkMode ? "bg-[#050505] border border-blood/30 text-neon-red placeholder:text-red-900/40 focus:border-neon-red" : "bg-white border border-gray-200 rounded-lg text-gray-700 focus:ring-1 focus:ring-blue-500"}`}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAiInteraction()}
+                    />
+                    <button 
+                      onClick={handleAiInteraction}
+                      disabled={isAiProcessing || !aiQuery.trim()}
+                      className={`px-4 py-2 text-xs transition-all disabled:opacity-50 ${isDarkMode ? "bg-blood/20 border border-blood/50 text-neon-red hover:bg-blood/40" : "bg-blue-600 text-white rounded-lg hover:bg-blue-700"}`}
+                    >
+                      Analyze
+                    </button>
+                  </div>
+                  {aiResult && (
+                    <div className={`mx-3 mb-3 p-3 text-xs overflow-auto max-h-40 border-t ${isDarkMode ? "border-blood/20 text-red-400 bg-[#050505]" : "border-gray-100 text-gray-600 bg-gray-50 rounded-lg"}`}>
+                      <div className="font-tech text-[9px] uppercase text-red-900/50 mb-1">Response:</div>
+                      <div className="prose prose-invert max-w-none">
+                        <ReactMarkdown>{aiResult}</ReactMarkdown>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <div className={`flex-1 overflow-hidden flex flex-col min-h-0 relative ${isDarkMode ? "bg-[#0a0a0a] rounded-none border border-blood/50 shadow-[0_0_20px_rgba(139,0,0,0.1)]" : "bg-white rounded-xl border border-gray-200 shadow-sm"}`}>
                  {isDarkMode && <div className="absolute top-0 right-0 p-1 font-tech text-[10px] text-red-900/30 select-none pointer-events-none">ROUTE_A_INPUT</div>}
                   <div className={`p-3 border-b shrink-0 flex items-center justify-between gap-2 ${isDarkMode ? "border-blood bg-[#111]" : "border-gray-200 bg-gray-50"}`}>
@@ -1012,10 +1086,10 @@ export default function App() {
                 <FileText className={`mb-4 ${isDarkMode ? "w-20 h-20 text-red-900/10 drop-shadow-[0_0_5px_rgba(255,0,0,0.2)]" : "w-16 h-16 text-gray-200"}`} />
                 <p className={isDarkMode ? "font-tech text-xl uppercase tracking-[0.3em] text-red-900/50" : ""}>{isDarkMode ? "No Signal" : "Select a file from the list to preview its content"}</p>
                 {isDarkMode && <div className="mt-4 flex gap-1 items-end h-4">
-                  <div className="w-1 bg-red-900/20 h-1 animate-ping" style={{ animationDelay: '0ms' }}></div>
-                  <div className="w-1 bg-red-900/20 h-2 animate-ping" style={{ animationDelay: '200ms' }}></div>
-                  <div className="w-1 bg-red-900/20 h-3 animate-ping" style={{ animationDelay: '400ms' }}></div>
-                  <div className="w-1 bg-red-900/20 h-4 animate-ping" style={{ animationDelay: '600ms' }}></div>
+                  <div className="w-1 bg-red-900/20 h-1 animate-ping" style={{ animationDelay: "0ms" }}></div>
+                  <div className="w-1 bg-red-900/20 h-2 animate-ping" style={{ animationDelay: "200ms" }}></div>
+                  <div className="w-1 bg-red-900/20 h-3 animate-ping" style={{ animationDelay: "400ms" }}></div>
+                  <div className="w-1 bg-red-900/20 h-4 animate-ping" style={{ animationDelay: "600ms" }}></div>
                 </div>}
               </div>
             )}
@@ -1025,4 +1099,3 @@ export default function App() {
     </div>
   );
 }
-

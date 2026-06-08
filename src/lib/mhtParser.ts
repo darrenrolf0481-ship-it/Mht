@@ -73,7 +73,7 @@ export function processSovereignPriority(content: string = '', customTermsStr: s
   const output: any = {
     _meta: {
       format: "Route A",
-      target: "Google Gem Saved Info Block"
+      target: "Ollama Saved Info Block"
     },
     sovereign_priority: isFieldLog ? "High" : "Standard",
     evidence_flags: evidenceFlags,
