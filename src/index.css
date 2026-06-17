@@ -1,12 +1,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Share+Tech+Mono&display=swap');
-@import "tailwindcss";
+@import 'tailwindcss';
 @plugin "@tailwindcss/typography";
 
 @theme {
-  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  --font-tech: "Share Tech Mono", monospace;
-  
+  --font-sans: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  --font-tech: 'Share Tech Mono', monospace;
+
   --color-void: #050505;
   --color-blood: #8b0000;
   --color-neon-red: #ff3333;
@@ -25,7 +25,7 @@ body.dark {
 
 /* CRT Scanline Effect */
 .dark .crt::after {
-  content: " ";
+  content: ' ';
   display: block;
   position: absolute;
   top: 0;

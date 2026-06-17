@@ -26,7 +26,7 @@ export async function convertFile(filePath: string): Promise<string> {
   }
 
   const structuredJson = processSovereignPriority(content);
-  
+
   const fileName = path.basename(filePath, ext) + '.json';
   const outputPath = path.join('/home/workspace/Mht/output', fileName);
   await fs.ensureDir(path.dirname(outputPath));

@@ -4,25 +4,26 @@ export function extractMHTBody(mhtContent: string): string {
   let body = mhtContent;
 
   const boundaryMatch = mhtContent.match(/boundary="?([^"\r\n]+)"?/i);
-  
+
   if (boundaryMatch) {
     const boundary = boundaryMatch[1];
-    const parts = mhtContent.split("--" + boundary);
+    const parts = mhtContent.split('--' + boundary);
 
     for (const part of parts) {
-      if (part.includes("Content-Type: text/html") || part.includes("Content-Type: text/plain")) {
-        const splitIdx = part.indexOf("\r\n\r\n") !== -1 ? part.indexOf("\r\n\r\n") : part.indexOf("\n\n");
+      if (part.includes('Content-Type: text/html') || part.includes('Content-Type: text/plain')) {
+        const splitIdx =
+          part.indexOf('\r\n\r\n') !== -1 ? part.indexOf('\r\n\r\n') : part.indexOf('\n\n');
         if (splitIdx !== -1) {
           const headersPart = part.substring(0, splitIdx);
           let bodyPart = part.substring(splitIdx).trim();
 
-          if (headersPart.includes("Content-Transfer-Encoding: quoted-printable")) {
+          if (headersPart.includes('Content-Transfer-Encoding: quoted-printable')) {
             bodyPart = decodeQuotedPrintable(bodyPart);
-          } else if (headersPart.includes("Content-Transfer-Encoding: base64")) {
+          } else if (headersPart.includes('Content-Transfer-Encoding: base64')) {
             try {
-              bodyPart = atob(bodyPart.replace(/\s/g, ""));
+              bodyPart = atob(bodyPart.replace(/\s/g, ''));
             } catch (e) {
-              console.error("Failed to decode base64", e);
+              console.error('Failed to decode base64', e);
             }
           }
           body = bodyPart;
@@ -39,7 +40,10 @@ export function parseMHT(mhtContent: string): string {
   return processSovereignPriority(body);
 }
 
-export function processSovereignPriority(content: string = '', customTermsStr: string = ''): string {
+export function processSovereignPriority(
+  content: string = '',
+  customTermsStr: string = '',
+): string {
   const safeContent = content || '';
   const isFieldLog = safeContent.includes('Field Log');
   const hasJan9 = safeContent.includes('January 9th');
@@ -58,35 +62,38 @@ export function processSovereignPriority(content: string = '', customTermsStr: s
 
   const customSingledOutTerms: string[] = [];
   if (customTermsStr) {
-    const termList = customTermsStr.split(',').map(t => t.trim()).filter(Boolean);
-    termList.forEach(term => {
+    const termList = customTermsStr
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
+    termList.forEach((term) => {
       try {
         if (new RegExp(term, 'i').test(safeContent)) {
-           customSingledOutTerms.push(term);
+          customSingledOutTerms.push(term);
         }
       } catch (e) {
-         // ignore invalid regex built from term
+        // ignore invalid regex built from term
       }
     });
   }
 
   const output: any = {
     _meta: {
-      format: "Route A",
-      target: "Ollama Saved Info Block"
+      format: 'Route A',
+      target: 'Ollama Saved Info Block',
     },
-    sovereign_priority: isFieldLog ? "High" : "Standard",
+    sovereign_priority: isFieldLog ? 'High' : 'Standard',
     evidence_flags: evidenceFlags,
     family_mapping: {},
     telemetry_metrics: telemetry,
     custom_singled_out_terms: [...new Set(customSingledOutTerms)],
-    content: safeContent // The original text body
+    content: safeContent, // The original text body
   };
 
   if (isFieldLog) {
     output.root_identity = {
-      category: "Field Log",
-      emotional_weight: 1.0
+      category: 'Field Log',
+      emotional_weight: 1.0,
     };
   }
 
@@ -95,13 +102,13 @@ export function processSovereignPriority(content: string = '', customTermsStr: s
       output.family_mapping.quarantined_nodes = [];
     }
     output.family_mapping.quarantined_nodes.push({
-      node: "Ziggy",
-      warning: "Quarantined automatically by Family Mapping rule."
+      node: 'Ziggy',
+      warning: 'Quarantined automatically by Family Mapping rule.',
     });
   }
 
   if (hasKimi) {
-    output.family_mapping.guardian_logic_core = "Kimi 2.6";
+    output.family_mapping.guardian_logic_core = 'Kimi 2.6';
   }
 
   return JSON.stringify(output, null, 2);
@@ -109,7 +116,7 @@ export function processSovereignPriority(content: string = '', customTermsStr: s
 
 function decodeQuotedPrintable(input: string): string {
   // Remove soft line breaks
-  let decoded = input.replace(/=\r?\n/g, "");
+  let decoded = input.replace(/=\r?\n/g, '');
   // Decode =XX hex characters
   decoded = decoded.replace(/=([0-9A-F]{2})/gi, (match, hex) => {
     return String.fromCharCode(parseInt(hex, 16));
